@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>银行账户系统 —— 类组织 + 异常处理</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+  min-height: 100vh; color: #e0e0e0; padding: 20px;
+}
+.container { max-width: 1100px; margin: 0 auto; }
+h1 {
+  text-align: center; font-size: 1.6rem; margin-bottom: 6px;
+  background: linear-gradient(90deg, #f093fb, #f5576c, #fda085);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.subtitle { text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 24px; }
+
+.layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+/* 卡片 */
+.card {
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; padding: 16px; backdrop-filter: blur(10px);
+}
+.card h3 {
+  font-size: 0.9rem; margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.1); color: #ccc;
+}
+.card h3 span { color: #fda085; }
+
+/* 账户卡片 */
+.accounts-grid { display: flex; flex-direction: column; gap: 10px; }
+.account-card {
+  background: rgba(255,255,255,0.06); border-radius: 10px; padding: 14px;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.3s;
+}
+.account-card.frozen { border-color: rgba(255,100,100,0.5); background: rgba(255,0,0,0.05); }
+.account-card .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.account-card .id { font-weight: 700; font-size: 1rem; color: #fda085; }
+.account-card .owner { color: #aaa; font-size: 0.8rem; }
+.account-card .balance { font-size: 1.5rem; font-weight: 700; margin: 4px 0; }
+.account-card .status {
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+  display: inline-block;
+}
+.status-ok { background: rgba(0,255,0,0.15); color: #4caf50; }
+.status-frozen { background: rgba(255,0,0,0.15); color: #f44336; }
+
+.account-card .actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.account-card .actions input {
+  width: 80px; padding: 5px 8px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.3); color: #fff; font-size: 0.8rem;
+}
+
+.btn {
+  padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer;
+  font-size: 0.75rem; font-weight: 600; transition: all 0.2s;
+}
+.btn-deposit  { background: #4caf50; color: #fff; }
+.btn-withdraw { background: #ff9800; color: #fff; }
+.btn-freeze   { background: #f44336; color: #fff; }
+.btn-unfreeze { background: #2196f3; color: #fff; }
+.btn-interest { background: #9c27b0; color: #fff; }
+.btn-danger   { background: #f44336; color: #fff; }
+.btn-primary  { background: #2196f3; color: #fff; }
+.btn:hover { opacity: 0.85; transform: translateY(-1px); }
+
+/* 日志区 */
+.log-area {
+  background: rgba(0,0,0,0.4); border-radius: 8px; padding: 10px;
+  height: 340px; overflow-y: auto; font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 0.78rem; line-height: 1.5;
+}
+.log-entry { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.log-info   { color: #90caf9; }
+.log-success{ color: #66bb6a; }
+.log-error  { color: #ef5350; }
+.log-warn   { color: #ffa726; }
+.log-system { color: #aaa; font-style: italic; }
+
+/* 转账区域 */
+.transfer-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
+.transfer-row select, .transfer-row input {
+  padding: 7px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.3); color: #fff; font-size: 0.8rem;
+}
+.transfer-row select { min-width: 120px; }
+.transfer-row input { width: 100px; }
+.btn-transfer { padding: 7px 20px; background: linear-gradient(135deg, #f093fb, #f5576c); color: #fff; }
+
+.full-width { grid-column: 1 / -1; }
+
+/* 异常演示按钮组 */
+.demo-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.demo-btns .btn { padding: 8px 16px; font-size: 0.8rem; }
+
+/* 模态提示 */
+.toast {
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+  padding: 12px 24px; border-radius: 8px; font-weight: 600; z-index: 1000;
+  animation: slideDown 0.3s ease;
+  font-size: 0.85rem;
+}
+.toast-error { background: #d32f2f; color: #fff; }
+.toast-success { background: #388e3c; color: #fff; }
+@keyframes slideDown { from { opacity: 0; transform: translateX(-50%) translateY(-20px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+/* 图例 */
+.legend { font-size: 0.7rem; color: #777; display: flex; gap: 16px; margin-top: 8px; }
+.legend .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+.legend .dot-ok { background: #4caf50; }
+.legend .dot-err { background: #ef5350; }
+.legend .dot-warn { background: #ffa726; }
+.legend .dot-info { background: #90caf9; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>银行账户系统</h1>
+  <p class="subtitle">类组织代码 × 异常处理保护 —— 可视化交互演示</p>
+
+  <div class="layout">
+
+    <!-- ======== 账户面板 ======== -->
+    <div class="card" style="min-height: 320px;">
+      <h3><span>📂</span> 账户列表</h3>
+      <div class="accounts-grid" id="accountList"></div>
+      <button class="btn btn-primary" onclick="resetDemo()" style="margin-top:10px;width:100%;">🔄 重置演示</button>
+    </div>
+
+    <!-- ======== 日志面板 ======== -->
+    <div class="card">
+      <h3><span>📋</span> 操作日志</h3>
+      <div class="log-area" id="logPanel"></div>
+      <div class="legend">
+        <span><span class="dot dot-ok"></span>成功</span>
+        <span><span class="dot dot-err"></span>异常</span>
+        <span><span class="dot dot-warn"></span>警告</span>
+        <span><span class="dot dot-info"></span>信息</span>
+      </div>
+    </div>
+
+    <!-- ======== 转账面板 ======== -->
+    <div class="card full-width">
+      <h3><span>💸</span> 转账（带事务回滚）</h3>
+      <div class="transfer-row">
+        <span style="color:#aaa;">从</span>
+        <select id="fromSelect"></select>
+        <span style="color:#aaa;">转到</span>
+        <select id="toSelect"></select>
+        <span style="color:#aaa;">金额</span>
+        <input id="transferAmount" type="number" value="100" min="1" step="0.01">
+        <button class="btn btn-transfer" onclick="doTransfer()">执行转账</button>
+      </div>
+      <p style="font-size:0.7rem;color:#666;margin-top:4px;">
+        * 目标账户被冻→转账失败，余额自动回滚（观察日志中的 [WARN] 回滚 和余额不变）
+      </p>
+    </div>
+
+    <!-- ======== 异常演示面板 ======== -->
+    <div class="card full-width">
+      <h3><span>🧪</span> 异常场景快捷演示</h3>
+      <div class="demo-btns">
+        <button class="btn btn-deposit" onclick="quickDemo('invalidAmount')">非法金额 (负数/零/字符串)</button>
+        <button class="btn btn-withdraw" onclick="quickDemo('insufficient')">余额不足取款</button>
+        <button class="btn btn-freeze" onclick="quickDemo('frozen')">冻结后拒绝操作</button>
+        <button class="btn btn-interest" onclick="quickDemo('interest')">储蓄账户计息（多态）</button>
+        <button class="btn btn-danger" onclick="quickDemo('rollback')">转账回滚演示</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toastContainer"></div>
+
+<script>
+// ============================================================
+// 异常类（对应 Python 版 BankError 体系）
+// ============================================================
+class BankError extends Error {}
+class InvalidAmountError extends BankError {
+  constructor(amount) { super(`金额必须大于 0，实际值: ${amount}`); this.amount = amount; }
+}
+class InsufficientFundsError extends BankError {
+  constructor(balance, requested) {
+    super(`余额不足！当前余额 ${balance.toFixed(2)}，尝试取款 ${requested.toFixed(2)}，差额 ${(requested-balance).toFixed(2)}`);
+    this.balance = balance; this.requested = requested;
+  }
+}
+class AccountFrozenError extends BankError {
+  constructor(accountId) { super(`账户 ${accountId} 已被冻结，操作拒绝`); }
+}
+class TransferError extends BankError {
+  constructor(fromId, toId, reason) {
+    super(`转账 ${fromId} -> ${toId} 失败: ${reason}`);
+    this.fromId = fromId; this.toId = toId;
+  }
+}
+
+// ============================================================
+// 账户类
+// ============================================================
+class BankAccount {
+  constructor(accountId, owner, initialBalance = 0) {
+    this.accountId = accountId;
+    this.owner = owner;
+    if (initialBalance < 0) throw new InvalidAmountError(initialBalance);
+    this._balance = initialBalance;
+    this._frozen = false;
+    this.transactions = [];
+    this._log(`账户创建，初始余额 ${initialBalance.toFixed(2)}`);
+  }
+  get balance() { return this._balance; }
+  get frozen() { return this._frozen; }
+
+  deposit(amount) {
+    this._checkNotFrozen();
+    this._checkPositive(amount);
+    this._balance += amount;
+    this._log(`存款 +${amount.toFixed(2)}，余额 ${this._balance.toFixed(2)}`);
+    return this._balance;
+  }
+  withdraw(amount) {
+    this._checkNotFrozen();
+    this._checkPositive(amount);
+    if (amount > this._balance) throw new InsufficientFundsError(this._balance, amount);
+    this._balance -= amount;
+    this._log(`取款 -${amount.toFixed(2)}，余额 ${this._balance.toFixed(2)}`);
+    return this._balance;
+  }
+  freeze() { this._frozen = true; this._log('账户已冻结'); }
+  unfreeze() { this._frozen = false; this._log('账户已解冻'); }
+
+  _checkNotFrozen() { if (this._frozen) throw new AccountFrozenError(this.accountId); }
+  _checkPositive(amount) {
+    if (typeof amount !== 'number' || amount <= 0 || isNaN(amount))
+      throw new InvalidAmountError(amount);
+  }
+  _log(msg) {
+    const time = new Date().toLocaleTimeString();
+    this.transactions.push(`[${time}] ${msg}`);
+  }
+}
+
+class SavingsAccount extends BankAccount {
+  static RATE = 0.02;
+  constructor(accountId, owner, initialBalance = 0) {
+    super(accountId, owner, initialBalance);
+    this.interestEarned = 0;
+  }
+  applyInterest() {
+    const interest = this._balance * SavingsAccount.RATE;
+    this._balance += interest;
+    this.interestEarned += interest;
+    this._log(`利息 +${interest.toFixed(2)}，累计利息 ${this.interestEarned.toFixed(2)}`);
+    return interest;
+  }
+}
+
+// ============================================================
+// 服务层
+// ============================================================
+class BankService {
+  constructor() {
+    this.accounts = {};
+  }
+  createAccount(id, owner, balance = 0, isSavings = false) {
+    if (this.accounts[id]) throw new BankError(`账户 ${id} 已存在`);
+    const acc = isSavings
+      ? new SavingsAccount(id, owner, balance)
+      : new BankAccount(id, owner, balance);
+    this.accounts[id] = acc;
+    return acc;
+  }
+  transfer(fromId, toId, amount) {
+    const from = this.accounts[fromId];
+    const to = this.accounts[toId];
+    if (!from) throw new TransferError(fromId, toId, `源账户 ${fromId} 不存在`);
+    if (!to) throw new TransferError(fromId, toId, `目标账户 ${toId} 不存在`);
+
+    const snapFrom = from.balance;
+    const snapTo = to.balance;
+    try {
+      from.withdraw(amount);
+      to.deposit(amount);
+    } catch (e) {
+      // 回滚
+      logWarn(`事务异常，回滚至转账前状态`);
+      from._balance = snapFrom;
+      to._balance = snapTo;
+      if (e instanceof BankError) throw new TransferError(fromId, toId, e.message);
+      throw new TransferError(fromId, toId, e.message);
+    }
+    log(`事务结束 | 源 ${fromId} 余额: ${from.balance.toFixed(2)} | 目标 ${toId} 余额: ${to.balance.toFixed(2)}`, 'info');
+  }
+}
+
+// ============================================================
+// 全局状态
+// ============================================================
+let bank = new BankService();
+let logEntries = [];
+
+function log(msg, type = 'system') {
+  logEntries.push({ msg, type });
+  renderLog();
+}
+
+function logError(msg) { log(msg, 'error'); }
+function logSuccess(msg) { log(msg, 'success'); }
+function logWarn(msg) { log(msg, 'warn'); }
+
+function showToast(msg, type = 'error') {
+  const container = document.getElementById('toastContainer');
+  const div = document.createElement('div');
+  div.className = `toast toast-${type}`;
+  div.textContent = msg;
+  container.appendChild(div);
+  setTimeout(() => div.remove(), 2500);
+}
+
+// ============================================================
+// 初始化数据
+// ============================================================
+function initData() {
+  bank = new BankService();
+  logEntries = [];
+  try {
+    bank.createAccount('A001', 'Alice', 1000);
+    bank.createAccount('B001', 'Bob', 500);
+    bank.createAccount('S001', 'Charlie', 5000, true);
+  } catch(e) { logError(e.message); }
+  renderAll();
+  log('系统就绪 —— 3 个账户已创建', 'system');
+}
+function resetDemo() {
+  initData();
+  showToast('演示已重置', 'success');
+}
+
+// ============================================================
+// 操作函数
+// ============================================================
+function doDeposit(accountId) {
+  const input = document.getElementById(`depAmt_${accountId}`);
+  const amount = parseFloat(input.value);
+  try {
+    bank.accounts[accountId].deposit(amount);
+    logSuccess(`[${accountId}] 存款 ${amount.toFixed(2)} 成功`);
+    renderAll();
+  } catch(e) {
+    logError(`[${accountId}] ${e.message}`);
+    showToast(e.message);
+  }
+}
+function doWithdraw(accountId) {
+  const input = document.getElementById(`witAmt_${accountId}`);
+  const amount = parseFloat(input.value);
+  try {
+    bank.accounts[accountId].withdraw(amount);
+    logSuccess(`[${accountId}] 取款 ${amount.toFixed(2)} 成功`);
+    renderAll();
+  } catch(e) {
+    logError(`[${accountId}] ${e.message}`);
+    showToast(e.message);
+  }
+}
+function doFreeze(accountId) {
+  bank.accounts[accountId].freeze();
+  logWarn(`[${accountId}] 账户已冻结`);
+  renderAll();
+}
+function doUnfreeze(accountId) {
+  bank.accounts[accountId].unfreeze();
+  log(`[${accountId}] 账户已解冻`, 'success');
+  renderAll();
+}
+function doInterest(accountId) {
+  try {
+    const acc = bank.accounts[accountId];
+    if (!(acc instanceof SavingsAccount)) throw new BankError('仅储蓄账户支持计息');
+    acc.applyInterest();
+    logSuccess(`[${accountId}] 计息完成`);
+    renderAll();
+  } catch(e) {
+    logError(e.message);
+    showToast(e.message);
+  }
+}
+function doTransfer() {
+  const fromId = document.getElementById('fromSelect').value;
+  const toId = document.getElementById('toSelect').value;
+  const amount = parseFloat(document.getElementById('transferAmount').value);
+  if (fromId === toId) { showToast('不能给自己转账'); return; }
+  try {
+    bank.transfer(fromId, toId, amount);
+    logSuccess(`转账成功: ${fromId} -> ${toId}, ${amount.toFixed(2)}`);
+    renderAll();
+    showToast('转账成功', 'success');
+  } catch(e) {
+    logError(`${e.message}`);
+    showToast(e.message);
+    renderAll(); // 回滚后重新渲染
+  }
+}
+
+// ============================================================
+// 快捷演示
+// ============================================================
+function quickDemo(type) {
+  const alice = bank.accounts['A001'];
+  const bob = bank.accounts['B001'];
+
+  switch(type) {
+    case 'invalidAmount':
+      log('--- 演示: 非法金额 ---', 'system');
+      for (const v of [-100, 0, 'abc']) {
+        try { alice.deposit(v); } catch(e) { logError(`输入 ${JSON.stringify(v)} -> ${e.message}`); }
+      }
+      break;
+    case 'insufficient':
+      log('--- 演示: 余额不足 ---', 'system');
+      try { alice.withdraw(99999); } catch(e) {
+        logError(`捕获到 InsufficientFundsError: ${e.message}`);
+      }
+      break;
+    case 'frozen':
+      log('--- 演示: 冻结后拒绝操作 ---', 'system');
+      alice.freeze(); renderAll();
+      try { alice.withdraw(50); } catch(e) { logError(e.message); }
+      alice.unfreeze(); renderAll();
+      break;
+    case 'interest':
+      log('--- 演示: 储蓄账户计息（多态） ---', 'system');
+      try {
+        const s = bank.accounts['S001'];
+        s.applyInterest();
+        logSuccess(`Charlie 获得利息，余额: ${s.balance.toFixed(2)}`);
+        renderAll();
+      } catch(e) { logError(e.message); }
+      break;
+    case 'rollback':
+      log('--- 演示: 转账回滚 ---', 'system');
+      const balA = alice.balance, balB = bob.balance;
+      log(`转账前: Alice=${balA.toFixed(2)}, Bob=${balB.toFixed(2)}`, 'info');
+      bob.freeze(); renderAll();
+      try { bank.transfer('A001', 'B001', 200); } catch(e) { logError(e.message); }
+      // 验证回滚
+      if (alice.balance === balA && bob.balance === balB) {
+        logSuccess(`回滚验证: 余额未变 Alice=${alice.balance.toFixed(2)} Bob=${bob.balance.toFixed(2)}`);
+      }
+      bob.unfreeze(); renderAll();
+      break;
+  }
+  renderAll();
+}
+
+// ============================================================
+// 渲染
+// ============================================================
+function renderAll() {
+  renderAccounts();
+  renderLog();
+  renderSelects();
+}
+function renderAccounts() {
+  const container = document.getElementById('accountList');
+  container.innerHTML = Object.values(bank.accounts).map(acc => {
+    const isSavings = acc instanceof SavingsAccount;
+    const cls = acc.frozen ? 'account-card frozen' : 'account-card';
+    const statusCls = acc.frozen ? 'status-frozen' : 'status-ok';
+    const statusText = acc.frozen ? '已冻结' : '正常';
+    const typeTag = isSavings ? ' <span style="color:#9c27b0;font-size:0.7rem;">[储蓄]</span>' : '';
+
+    let actions = '';
+    if (!acc.frozen) {
+      actions += `<input id="depAmt_${acc.accountId}" type="number" value="100" min="1" step="0.01">`;
+      actions += `<button class="btn btn-deposit" onclick="doDeposit('${acc.accountId}')">存款</button>`;
+      actions += `<input id="witAmt_${acc.accountId}" type="number" value="50" min="1" step="0.01">`;
+      actions += `<button class="btn btn-withdraw" onclick="doWithdraw('${acc.accountId}')">取款</button>`;
+      actions += `<button class="btn btn-freeze" onclick="doFreeze('${acc.accountId}')">冻结</button>`;
+    } else {
+      actions += `<button class="btn btn-unfreeze" onclick="doUnfreeze('${acc.accountId}')">解冻</button>`;
+    }
+    if (isSavings) {
+      actions += `<button class="btn btn-interest" onclick="doInterest('${acc.accountId}')">计息</button>`;
+    }
+
+    return `
+      <div class="${cls}">
+        <div class="header">
+          <span class="id">${acc.accountId}${typeTag}</span>
+          <span class="owner">${acc.owner}</span>
+          <span class="status ${statusCls}">${statusText}</span>
+        </div>
+        <div class="balance">¥ ${acc.balance.toFixed(2)}</div>
+        ${isSavings ? `<div style="color:#9c27b0;font-size:0.7rem;">累计利息: ${acc.interestEarned.toFixed(2)} | 利率: ${(SavingsAccount.RATE*100).toFixed(0)}%</div>` : ''}
+        <div class="actions">${actions}</div>
+      </div>`;
+  }).join('');
+}
+function renderLog() {
+  const panel = document.getElementById('logPanel');
+  panel.innerHTML = logEntries.slice(-50).map(entry => {
+    const cls = `log-entry log-${entry.type}`;
+    return `<div class="${cls}">${entry.msg}</div>`;
+  }).join('');
+  panel.scrollTop = panel.scrollHeight;
+}
+function renderSelects() {
+  const ids = Object.keys(bank.accounts);
+  const opts = ids.map(id => `<option value="${id}">${id} - ${bank.accounts[id].owner}</option>`).join('');
+  document.getElementById('fromSelect').innerHTML = opts;
+  document.getElementById('toSelect').innerHTML = opts;
+  // 默认选不同账户
+  if (ids.length >= 2) {
+    document.getElementById('fromSelect').value = ids[0];
+    document.getElementById('toSelect').value = ids[1];
+  }
+}
+
+// 启动
+initData();
+</script>
+</body>
+</html>
